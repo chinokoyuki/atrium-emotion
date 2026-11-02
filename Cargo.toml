@@ -1,0 +1,27 @@
+[package]
+name = "atrium-emotion"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Affective state engine: PAD emotion model with OU drift, circadian rhythm, inertia, compound emotions, and separation/reunion dynamics"
+readme = "README.md"
+repository = "https://github.com/chinokoyuki/atrium-emotion"
+keywords = ["emotion", "affective-computing", "pad", "sentiment", "simulation"]
+categories = ["algorithms", "game-development"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+chrono = "0.4"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = "0.5"
+serde_json = "1"
+
+[[bench]]
+name = "emotion_bench"
+harness = false
+
+[profile.bench]
+lto = true

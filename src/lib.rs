@@ -132,6 +132,37 @@ impl EmotionState {
         }
     }
 
+    /// PAD 数组形式 — 生态互通的便捷表示
+    /// PAD as an array — convenient bridge to ecosystem crates.
+    ///
+    /// 返回 `[pleasure, arousal, dominance]`，可直接传入
+    /// [tts-prosody](https://crates.io/crates/tts-prosody) 的
+    /// `ProsodyMapper::map(pad, &lp)` 生成语音韵律，
+    /// 或填入 [cogmem](https://crates.io/crates/cogmem) 的
+    /// `EmotionContext::ai_pad` 做情感记忆快照。
+    ///
+    /// Returns `[pleasure, arousal, dominance]` — feed it straight into
+    /// [tts-prosody](https://crates.io/crates/tts-prosody)'s
+    /// `ProsodyMapper::map(pad, &lp)` for voice prosody, or into
+    /// [cogmem](https://crates.io/crates/cogmem)'s `EmotionContext::ai_pad`
+    /// for emotional memory snapshots.
+    pub fn pad(&self) -> [f32; 3] {
+        [self.pleasure, self.arousal, self.dominance]
+    }
+
+    /// 从 PAD 数组构造状态 / Construct a state from a PAD array.
+    ///
+    /// `pad = [pleasure, arousal, dominance]`，与 [`pad`](Self::pad) 互逆。
+    ///
+    /// `pad = [pleasure, arousal, dominance]` — the inverse of [`pad`](Self::pad).
+    pub fn from_pad(pad: [f32; 3]) -> Self {
+        Self {
+            pleasure: pad[0],
+            arousal: pad[1],
+            dominance: pad[2],
+        }
+    }
+
     /// 向默认状态衰减（线性插值）
     /// Decay toward default state (linear interpolation).
     ///
@@ -510,6 +541,25 @@ mod tests {
         assert!(approx_eq(state.pleasure, 0.0, 1e-6));
         assert!(approx_eq(state.arousal, 0.0, 1e-6));
         assert!(approx_eq(state.dominance, 0.0, 1e-6));
+    }
+
+    #[test]
+    fn test_pad_roundtrip() {
+        // pad() 与 from_pad() 互逆 / pad() and from_pad() are inverses
+        let state = EmotionState::new(0.7, -0.3, 0.4);
+        assert_eq!(state.pad(), [0.7, -0.3, 0.4]);
+        let back = EmotionState::from_pad(state.pad());
+        assert!(approx_eq(back.pleasure, 0.7, 1e-6));
+        assert!(approx_eq(back.arousal, -0.3, 1e-6));
+        assert!(approx_eq(back.dominance, 0.4, 1e-6));
+    }
+
+    #[test]
+    fn test_from_pad_negative_values() {
+        let state = EmotionState::from_pad([-0.9, 0.2, -0.5]);
+        assert!(approx_eq(state.pleasure, -0.9, 1e-6));
+        assert!(approx_eq(state.arousal, 0.2, 1e-6));
+        assert!(approx_eq(state.dominance, -0.5, 1e-6));
     }
 
     // ── affect 测试 ──

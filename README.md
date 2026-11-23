@@ -11,7 +11,7 @@ A small affective-computing engine for Rust.
 
 It maintains a 3-dimensional emotional state (Pleasure–Arousal–Dominance, after Mehrabian & Russell) and moves it around in ways that hold up to scrutiny: it drifts when idle, follows a daily rhythm, gets sticky when a mood lingers, and classifies the result into discrete labels — 11 basic ones, 22 compound ones.
 
-No LLM, no database, no async runtime. Just f32 math, 156 unit tests, and a criterion bench suite.
+No LLM, no database, no async runtime. Just f32 math, 116 unit tests, and a criterion bench suite.
 
 ## Where this fits
 
@@ -97,6 +97,18 @@ Events call `affect()` with a PAD delta, scaled by current inertia sensitivity.
 - Emotion names ship in both Chinese and English (`name` / `en_name`). Built-in suggested phrases are Chinese; the numeric outputs (intensity, PAD offsets) are language-neutral, so bring your own phrase tables for other languages.
 - All state types derive `Serialize`/`Deserialize`; `snapshot()` / `restore()` cover persistence.
 - Benchmarks: `cargo bench`. The full engine tick is sub-microsecond territory — cheap enough for a per-frame game loop.
+
+## Ecosystem
+
+New in 0.2: `EmotionState::pad() -> [f32; 3]` — the PAD array plugs this crate into its siblings (all extracted from the same project):
+
+```rust
+let prosody = ProsodyMapper::map(engine.current().pad(), &lp); // → tts-prosody
+let ctx = EmotionContext { ai_pad: engine.current().pad(), /* … */ }; // → cogmem
+```
+
+- [tts-prosody](https://crates.io/crates/tts-prosody) turns the PAD array into Piper / GPT-SoVITS synthesis parameters
+- [cogmem](https://crates.io/crates/cogmem) stores the array in `EmotionContext::ai_pad` for emotional memory snapshots
 
 ## License
 

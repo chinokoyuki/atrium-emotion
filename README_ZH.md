@@ -11,7 +11,7 @@
 
 维护一个三维情感状态（愉悦–唤醒–支配，即 Mehrabian & Russell 的 PAD 模型），并让它按经得起推敲的方式运动：空闲时随机漂移、随昼夜节律起伏、情绪持续时会粘滞，最后把状态归类为离散标签——11 种基本情绪、22 种复合情绪。
 
-不依赖 LLM、数据库、异步运行时。只有 f32 运算、156 个单元测试和一套 criterion 基准。
+不依赖 LLM、数据库、异步运行时。只有 f32 运算、116 个单元测试和一套 criterion 基准。
 
 ## 适用场景
 
@@ -97,6 +97,18 @@ if let Some(ce) = classify_compound(engine.current(), &ctx) {
 - 情绪名同时提供中英文（`name` / `en_name`）。内置建议用语为中文；数值输出（强度、PAD 偏移）与语言无关，其他语言请自备用语表。
 - 所有状态类型实现 `Serialize`/`Deserialize`；`snapshot()` / `restore()` 负责持久化。
 - 基准测试：`cargo bench`。完整引擎 tick 在亚微秒量级，放进逐帧游戏循环也没有压力。
+
+## 生态
+
+0.2 新增：`EmotionState::pad() -> [f32; 3]`——PAD 数组把这个 crate 和它的兄弟库（都来自同一工程）直接连通：
+
+```rust
+let prosody = ProsodyMapper::map(engine.current().pad(), &lp); // → tts-prosody
+let ctx = EmotionContext { ai_pad: engine.current().pad(), /* … */ }; // → cogmem
+```
+
+- [tts-prosody](https://crates.io/crates/tts-prosody) 把 PAD 数组翻译成 Piper / GPT-SoVITS 的合成参数
+- [cogmem](https://crates.io/crates/cogmem) 把 PAD 数组存进 `EmotionContext::ai_pad`，做情感记忆快照
 
 ## 许可
 

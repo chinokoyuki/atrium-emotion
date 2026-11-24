@@ -6,7 +6,8 @@
 //!
 //! 情感状态机：PAD 三维模型 + OU 随机漂移 + 昼夜节律 + 情绪惯性 + 22 种复合情绪 + 想念/重逢动态。
 
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 // ════════════════════════════════════════════════════════════════════
@@ -249,8 +250,17 @@ impl DriftParams {
     }
 
     /// 一步 OU 过程，返回 [ΔP, ΔA, ΔD]
+    /// One OU step, returns [ΔP, ΔA, ΔD].
+    ///
+    /// 使用系统随机源；需要可复现序列时用 [`step_with`](Self::step_with)。
+    /// Uses the system RNG; for reproducible sequences use [`step_with`](Self::step_with).
     pub fn step(&self, current: [f64; 3]) -> [f64; 3] {
-        let mut rng = rand::thread_rng();
+        self.step_with(&mut rand::thread_rng(), current)
+    }
+
+    /// 用调用方提供的随机源执行一步 OU 过程
+    /// One OU step using a caller-provided RNG.
+    pub fn step_with<R: Rng + ?Sized>(&self, rng: &mut R, current: [f64; 3]) -> [f64; 3] {
         let mut delta = [0.0f64; 3];
         for i in 0..3 {
             let noise: f64 = rng.gen_range(-1.0..1.0);
@@ -290,6 +300,8 @@ pub struct EmotionEngine {
     longing: Option<(LongingParams, LongingState)>,
     /// 重逢爆发配置 / Reunion burst configuration
     reunion_burst: Option<ReunionBurst>,
+    /// 引擎内部随机源（漂移与想念共用）/ Internal RNG shared by drift and longing
+    rng: StdRng,
 }
 
 impl EmotionEngine {
@@ -303,7 +315,20 @@ impl EmotionEngine {
             inertia: None,
             longing: None,
             reunion_burst: None,
+            rng: StdRng::from_entropy(),
         }
+    }
+
+    /// 固定随机种子，使 tick 序列可复现
+    /// Pin the RNG seed so tick sequences are reproducible.
+    ///
+    /// 相同构造、相同调用顺序下，两次运行会得到逐位相同的 PAD 状态，
+    /// 便于回放、确定性测试和对齐的模拟。
+    /// With the same construction and call order, two runs produce bit-identical
+    /// PAD states — useful for replays, deterministic tests, and aligned simulations.
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.rng = StdRng::seed_from_u64(seed);
+        self
     }
 
     /// 启用 OU 随机漂移 / Enable OU stochastic drift.
@@ -382,7 +407,7 @@ impl EmotionEngine {
                 self.current.arousal as f64,
                 self.current.dominance as f64,
             ];
-            let delta = drift.step(current_arr);
+            let delta = drift.step_with(&mut self.rng, current_arr);
             self.current.pleasure += delta[0] as f32;
             self.current.arousal += delta[1] as f32;
             self.current.dominance += delta[2] as f32;
@@ -417,7 +442,8 @@ impl EmotionEngine {
                     self.current.arousal as f64,
                     self.current.dominance as f64,
                 ];
-                let delta = params.step_toward(current_arr, state.current_baseline);
+                let delta =
+                    params.step_toward_with(&mut self.rng, current_arr, state.current_baseline);
                 self.current.pleasure += delta[0] as f32;
                 self.current.arousal += delta[1] as f32;
                 self.current.dominance += delta[2] as f32;
@@ -824,6 +850,67 @@ mod tests {
             engine.current().dominance.abs() <= 1.0,
             "D 应被限制在 [-1, 1]"
         );
+    }
+
+    // ── 可复现随机性测试 / Deterministic RNG Tests ──
+
+    #[test]
+    fn test_drift_step_with_seed_matches() {
+        let drift = DriftParams::new(0.05, 0.01);
+        let current = [0.3, -0.2, 0.1];
+        let mut a = StdRng::seed_from_u64(7);
+        let mut b = StdRng::seed_from_u64(7);
+        for _ in 0..50 {
+            assert_eq!(
+                drift.step_with(&mut a, current),
+                drift.step_with(&mut b, current),
+                "相同种子应产生相同的漂移序列"
+            );
+        }
+    }
+
+    #[test]
+    fn test_longing_step_toward_with_seed_matches() {
+        let params = LongingParams::default();
+        let current = [0.0, 0.0, 0.0];
+        let target = [-0.25, 0.05, -0.15];
+        let mut a = StdRng::seed_from_u64(11);
+        let mut b = StdRng::seed_from_u64(11);
+        for _ in 0..32 {
+            assert_eq!(
+                params.step_toward_with(&mut a, current, target),
+                params.step_toward_with(&mut b, current, target),
+                "相同种子应产生相同的想念漂移序列"
+            );
+        }
+    }
+
+    #[test]
+    fn test_engine_with_seed_reproduces_tick_sequence() {
+        fn build() -> EmotionEngine {
+            let mut longing_state = LongingState::new([-0.25, 0.05, -0.15]);
+            longing_state.intensity = 0.8;
+            let mut engine = EmotionEngine::new(EmotionState::new(0.0, 0.0, 0.0), 0.05)
+                .with_seed(0xC0FFEE)
+                .with_drift(DriftParams::new(0.05, 0.01))
+                .with_circadian(CircadianModulator::default())
+                .with_inertia(EmotionalInertia::default())
+                .with_longing(LongingParams::default(), longing_state);
+            engine.affect(&EmotionState::new(0.4, 0.2, 0.1));
+            engine
+        }
+
+        let mut a = build();
+        let mut b = build();
+        for _ in 0..200 {
+            a.tick_with_hour(15);
+            b.tick_with_hour(15);
+            assert_eq!(
+                a.current().pad(),
+                b.current().pad(),
+                "同种子 tick 序列应逐位一致"
+            );
+        }
     }
 
     // ── CircadianModulator 测试 ──

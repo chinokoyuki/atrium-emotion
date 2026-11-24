@@ -11,7 +11,7 @@ A small affective-computing engine for Rust.
 
 It maintains a 3-dimensional emotional state (Pleasure–Arousal–Dominance, after Mehrabian & Russell) and moves it around in ways that hold up to scrutiny: it drifts when idle, follows a daily rhythm, gets sticky when a mood lingers, and classifies the result into discrete labels — 11 basic ones, 22 compound ones.
 
-No LLM, no database, no async runtime. Just f32 math, 116 unit tests, and a criterion bench suite.
+No LLM, no database, no async runtime. Just f32 math, 119 unit tests, and a criterion bench suite.
 
 ## Where this fits
 
@@ -23,7 +23,7 @@ No LLM, no database, no async runtime. Just f32 math, 116 unit tests, and a crit
 
 ```toml
 [dependencies]
-atrium-emotion = "0.1"
+atrium-emotion = "0.3"
 ```
 
 Requires Rust 1.82+.
@@ -77,6 +77,18 @@ State is a point in PAD space, each axis clamped to [-1, 1]. Each `tick()` appli
 Events call `affect()` with a PAD delta, scaled by current inertia sensitivity.
 
 **Classification** is weighted nearest-neighbor over label centroids (arousal weighted ×1.2), with a neutral-zone precheck so near-zero states don't get mislabeled. **Compound emotions** layer on top: each has a PAD center, a radius, and a direction constraint (self / other / memory / neutral), so "guilt" and "gratitude" live in adjacent PAD regions but never collide.
+
+## Reproducibility
+
+`EmotionEngine::new` seeds its RNG from the OS, so independent runs diverge. Pin the seed when you need them not to:
+
+```rust
+let engine = EmotionEngine::new(default, 0.05)
+    .with_seed(0xC0FFEE)
+    .with_drift(DriftParams::new(0.02, 0.01));
+```
+
+Same seed, same call order — PAD values come out bit-identical, which covers replays and deterministic tests. If you drive a single step yourself, `DriftParams::step_with(&mut rng, current)` and `LongingParams::step_toward_with(&mut rng, current, target)` take any `rand::Rng`.
 
 ## Modules
 

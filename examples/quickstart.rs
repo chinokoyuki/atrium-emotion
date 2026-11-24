@@ -9,6 +9,7 @@ use atrium_emotion::{
 fn main() {
     // 1. Build an engine: default PAD state + decay rate, then stack features.
     let mut engine = EmotionEngine::new(EmotionState::new(0.0, 0.0, 0.0), 0.05)
+        .with_seed(0xA17E) // pin the RNG so runs are reproducible
         .with_drift(DriftParams::new(0.02, 0.01)) // idle wobble around the baseline
         .with_circadian(CircadianModulator::default()) // morning / evening energy peaks
         .with_inertia(EmotionalInertia::default()) // moods get sticky over time

@@ -34,11 +34,25 @@ impl LongingParams {
     /// 一步 OU 过程，向指定基线漂移，返回 [ΔP, ΔA, ΔD]
     /// One OU step toward the given baseline, returns [ΔP, ΔA, ΔD].
     ///
+    /// 使用系统随机源；需要可复现序列时用 [`step_toward_with`](Self::step_toward_with)。
+    /// Uses the system RNG; for reproducible sequences use
+    /// [`step_toward_with`](Self::step_toward_with).
+    ///
     /// @param current 当前 PAD 值 / Current PAD values
     /// @param target  目标基线 / Target baseline
     /// @return [ΔP, ΔA, ΔD] 增量 / Incremental delta
     pub fn step_toward(&self, current: [f64; 3], target: [f64; 3]) -> [f64; 3] {
-        let mut rng = rand::thread_rng();
+        self.step_toward_with(&mut rand::thread_rng(), current, target)
+    }
+
+    /// 用调用方提供的随机源向指定基线漂移一步
+    /// One OU step toward the given baseline using a caller-provided RNG.
+    pub fn step_toward_with<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        current: [f64; 3],
+        target: [f64; 3],
+    ) -> [f64; 3] {
         let mut delta = [0.0f64; 3];
         for i in 0..3 {
             let noise: f64 = rng.gen_range(-1.0..1.0);

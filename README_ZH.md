@@ -11,7 +11,7 @@
 
 维护一个三维情感状态（愉悦–唤醒–支配，即 Mehrabian & Russell 的 PAD 模型），并让它按经得起推敲的方式运动：空闲时随机漂移、随昼夜节律起伏、情绪持续时会粘滞，最后把状态归类为离散标签——11 种基本情绪、22 种复合情绪。
 
-不依赖 LLM、数据库、异步运行时。只有 f32 运算、116 个单元测试和一套 criterion 基准。
+不依赖 LLM、数据库、异步运行时。只有 f32 运算、119 个单元测试和一套 criterion 基准。
 
 ## 适用场景
 
@@ -23,7 +23,7 @@
 
 ```toml
 [dependencies]
-atrium-emotion = "0.1"
+atrium-emotion = "0.3"
 ```
 
 需要 Rust 1.82+。
@@ -77,6 +77,18 @@ if let Some(ce) = classify_compound(engine.current(), &ctx) {
 事件通过 `affect()` 传入 PAD 增量，受当前惯性敏感度缩放。
 
 **分类**是对标签中心点的加权最近邻（arousal 权重 ×1.2），并有中性区间预判，避免近零状态被误判。**复合情绪**在其上叠加：每种复合情绪有 PAD 中心、半径和方向约束（自身 / 对方 / 记忆 / 无方向），因此"内疚"和"感激"即使 PAD 区域相邻也不会混淆。
+
+## 可复现性
+
+`EmotionEngine::new` 用系统随机源初始化，独立运行之间不会重合。需要重合时固定种子：
+
+```rust
+let engine = EmotionEngine::new(default, 0.05)
+    .with_seed(0xC0FFEE)
+    .with_drift(DriftParams::new(0.02, 0.01));
+```
+
+相同种子、相同调用顺序下，PAD 值逐位一致，回放和确定性测试都能用。如果只单独调用一步，`DriftParams::step_with(&mut rng, current)` 和 `LongingParams::step_toward_with(&mut rng, current, target)` 接受任意 `rand::Rng`。
 
 ## 模块
 
